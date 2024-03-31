@@ -15,7 +15,9 @@ def process_root_data(path_to_root_file: str) -> list[dict]:
 			continue
 		
 		# Lepton metrics
-		lepton_pt = {f"lepton_pt_{i}": value for i, value in enumerate(entry.lep_pt)}
+		lepton_type = {f"lepton_type_{i}": list(set(entry.lep_type)).index(value) for i, value in
+		               enumerate(entry.lep_type)}
+		lepton_charge = {f"lepton_charge_{i}": value for i, value in enumerate(entry.lep_charge)}
 		
 		# Differences in angles between the two leptons
 		lepton_thetas = [2 * np.arctan(np.exp(-value)) for value in entry.lep_eta]
@@ -23,10 +25,14 @@ def process_root_data(path_to_root_file: str) -> list[dict]:
 		lepton_phi_diff = np.abs(entry.lep_phi[1] - entry.lep_phi[0])
 		lepton_angular_diff = np.sqrt(lepton_theta_diff ** 2 + lepton_phi_diff ** 2)
 		
-		lepton_type = {f"lepton_type_{i}": list(set(entry.lep_type)).index(value) for i, value in
-		               enumerate(entry.lep_type)}
-		lepton_energy = {f"lepton_energy_{i}": value for i, value in enumerate(entry.lep_E)}
-		lepton_charge = {f"lepton_charge_{i}": value for i, value in enumerate(entry.lep_charge)}
+		# Invariant mass of lepton pair
+		lepton_pt = [value for value in entry.lep_pt]
+		lepton_x_momentum = [pT * np.cos(phi) for pT, phi in zip(entry.lep_pt, entry.lep_phi)]
+		lepton_y_momentum = [pT * np.sin(phi) for pT, phi in zip(entry.lep_pt, entry.lep_phi)]
+		lepton_z_momentum = [pT * np.sinh(eta) for pT, eta in zip(entry.lep_pt, entry.lep_eta)]
+		
+		lepton_inv_mass = np.sqrt(sum(entry.lep_E) ** 2 - (
+				sum(lepton_x_momentum) ** 2 + sum(lepton_y_momentum) ** 2 + sum(lepton_z_momentum) ** 2))
 		
 		# Jet metrics
 		jet_pt = {f"jet_pt_{i}": value for i, value in enumerate(entry.jet_pt)}
@@ -58,23 +64,19 @@ def process_root_data(path_to_root_file: str) -> list[dict]:
 		
 		event = {
 			k: v for k, v in
-			zip([*lepton_pt.keys(), *lepton_type.keys(),
-			     *lepton_energy.keys(),
+			zip([*lepton_type.keys(),
 			     *lepton_charge.keys(), *jet_pt.keys(), *jet_theta.keys(), *jet_phi.keys(), *jet_type.keys(),
 			     *jet_energy.keys()],
 			    
-			    [*lepton_pt.values(), *lepton_type.values(),
-			     *lepton_energy.values(), *lepton_charge.values(), *jet_pt.values(), *jet_theta.values(),
-			     *jet_phi.values(),
-			     *jet_type.values(), *jet_energy.values()])
+			    [*lepton_type.values(), *lepton_charge.values(), *jet_pt.values(), *jet_theta.values(),
+			     *jet_phi.values(), *jet_type.values(), *jet_energy.values()])
 		}
 		
 		event["id"] = i
 		event["lepton_theta_diff"] = lepton_theta_diff
 		event["lepton_phi_diff"] = lepton_phi_diff
 		event["lepton_angular_diff"] = lepton_angular_diff
-		
-		# event["photon_inv_mass"] = photon_inv_mass
+		event["lepton_inv_mass"] = lepton_inv_mass
 		
 		events.append(event)
 	
