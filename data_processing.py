@@ -3,7 +3,20 @@ import numpy as np
 import polars as pl
 
 
-def process_root_data(path_to_root_file: str, limit: int = None, do_show_iteration_count: bool = False) -> list[dict]:
+def process_root_data(path_to_root_file: str, limit: int = None, show_iteration_count: bool = False, label=None) -> \
+		list[dict]:
+	"""
+	Convert a ROOT file to a CSV with certain high-level variables pre-computed.
+	
+	Args:
+		path_to_root_file: Path to the ROOT file to convert.
+		limit: Maximum number of events to be processed.
+		show_iteration_count: Print a running iteration count to track the function's progress.
+		label: Identifier data that can be optionally added to each entry in a dataset.
+
+	Returns:
+		list[dict]: List of each event processed.
+	"""
 	file = ROOT.TFile.Open(path_to_root_file, "READ")
 	raw_data = file.mini
 	
@@ -12,7 +25,7 @@ def process_root_data(path_to_root_file: str, limit: int = None, do_show_iterati
 		if limit is not None and i >= limit:
 			break
 		
-		if do_show_iteration_count:
+		if show_iteration_count:
 			print(f"\rProcessing... Iteration: {i:09d}", end="")
 		
 		if entry.lep_n != 2:  # Reject all events with more or less than two leptons
@@ -76,18 +89,28 @@ def process_root_data(path_to_root_file: str, limit: int = None, do_show_iterati
 		event["met_et"] = entry.met_et
 		event["met_phi"] = entry.met_phi
 		
+		if label is not None:
+			event["label"] = label
+		
 		events.append(event)
 	
 	return events
 
 
 if __name__ == "__main__":
-	file_name: str = input("File name: ")
+	file_names: list[str] = ["mc_345324.ggH125_WW2lep.2lep.root", "mc_363492.llvv.2lep.root"]
+	data_label_mapping: list[int] = [1, 0]  # 0 => Background, 1 => Higgs event
+	output_name: str = "event_dataset.csv"
 	
-	processed_data: list[dict] = process_root_data("Data/Raw Data/" + file_name, limit=1000,
-	                                               do_show_iteration_count=True)
+	processed_data: list[dict] = []
+	
+	for file_name, label in zip(file_names, data_label_mapping):
+		processed_data = [*processed_data, *process_root_data("Data/Raw Data/" + file_name.strip(), limit=10000,
+		                                                      show_iteration_count=True, label=label)]
+		
+		print(f"\nProcessed {file_name.strip()}...\n")
 	
 	print("\nWriting to CSV...")
 	df: pl.DataFrame = pl.DataFrame(processed_data)
-	df.write_csv(output_path := "Data/Processed Data/" + file_name.replace(".root", ".csv"))
+	df.write_csv(output_path := "Data/Processed Data/" + output_name)
 	print(f"Saved to {output_path}")
