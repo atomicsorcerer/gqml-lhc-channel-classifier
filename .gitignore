@@ -1,4 +1,5 @@
 /venv
 output_file
 /Data/*/*
-__pycache__
+__pycache__/
+__pycache__/*
