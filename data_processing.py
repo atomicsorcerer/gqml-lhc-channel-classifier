@@ -13,7 +13,7 @@ def process_root_data(path_to_root_file: str, limit: int = None, show_iteration_
 		limit: Maximum number of events to be processed.
 		show_iteration_count: Print a running iteration count to track the function's progress.
 		label: Identifier data that can be optionally added to each entry in a dataset.
-
+	
 	Returns:
 		list[dict]: List of each event processed.
 	"""
