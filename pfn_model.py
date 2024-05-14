@@ -33,12 +33,20 @@ class ParticleMapping(nn.Module):
 		"""
 		Maps each set of observables of a particle to a specific dimensional output and sums them together.
 		
-		>>> ParticleMapping(4, 8, hidden_layer_dimensions=[100, 100])
+		>>> particle_map = ParticleMapping(4, 8, hidden_layer_dimensions=[100, 50])
+		>>> X = torch.Tensor([1, 2, 3, 4])
+		>>> X2 = torch.Tensor([5, 6, 7, 8])
+		>>> particle_map.forward(X) + particle_map.forward(X2) == particle_map.forward(torch.cat((X, X2)))
+		tensor([True, True, True, True, True, True, True, True])
 		
 		Args:
 			input_size: The number of data points each particle has.
 			output_dimension: The fixed number of output nodes.
 			hidden_layer_dimensions: A list of numbers which set the sizes of hidden layers.
+		
+		Raises:
+			TypeError: If hidden_layer_dimensions is not a list.
+			ValueError: If hidden_layer_dimensions is an empty list.
 		"""
 		super().__init__()
 		
@@ -47,14 +55,22 @@ class ParticleMapping(nn.Module):
 		
 		if hidden_layer_dimensions is None:
 			hidden_layer_dimensions = [100]
+		elif not isinstance(hidden_layer_dimensions, list):
+			raise TypeError(f"Hidden layer dimensions must be a valid list. {hidden_layer_dimensions} is not valid.")
+		elif len(hidden_layer_dimensions) == 0:
+			raise ValueError("Hidden layer dimensions cannot be empty.")
 		
-		stack = nn.Sequential(nn.Linear(input_size, hidden_layer_dimensions[0] or output_dimension), )
+		stack = nn.Sequential(nn.Linear(input_size, hidden_layer_dimensions[0] or output_dimension))
 		
 		for i in range(len(hidden_layer_dimensions)):
-			stack.append(nn.Linear(hidden_layer_dimensions[i], hidden_layer_dimensions[i + 1] or output_dimension))
+			stack.append(
+				nn.Linear(hidden_layer_dimensions[i],
+				          hidden_layer_dimensions[i] if i == len(hidden_layer_dimensions) - 1 else
+				          hidden_layer_dimensions[
+					          i + 1]))
 			stack.append(nn.ReLU())
 		
-		stack.append(nn.Linear(hidden_layer_dimensions[-1] or input_size, output_dimension))
+		stack.append(nn.Linear(hidden_layer_dimensions[-1], output_dimension))
 		
 		self.stack = stack
 	
@@ -63,7 +79,7 @@ class ParticleMapping(nn.Module):
 		Forward implementation for ParticleMapping.
 		
 		Args:
-			x: Input tensor(s).
+			x: Input tensor.
 		
 		Raises:
 			ValueError: Input tensor must be able to evenly split for the given input size.
@@ -75,12 +91,14 @@ class ParticleMapping(nn.Module):
 			raise ValueError(
 				"Each particle must have the same number of observables, which must be equal to the input size.")
 		
-		inputs = np.array_split(x.numpy(), self.input_size)
-		outputs = self.stack(inputs)
-		output = np.zeros(self.output_size)
+		inputs = np.array_split(x.numpy(), int(len(x) / self.input_size))
+		output = np.zeros(self.output_dimension)
 		
-		for mapping in outputs:
-			for i in range(self.output_dimension):
-				output[i] += mapping[i]
+		for particle in inputs:
+			tensor = torch.from_numpy(particle)
+			individual_map = self.stack(tensor)
+			
+			for i, value in enumerate(individual_map):
+				output[i] += value
 		
 		return torch.Tensor(output)
