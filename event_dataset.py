@@ -12,7 +12,8 @@ class EventDataset(Dataset):
 		Args:
 			file_path: Path to the CSV file to be read.
 		"""
-		self.labels = pl.read_csv(file_path).get_column("label").apply(lambda s: [1.0] if s else [0.0])
+		self.labels = pl.read_csv(file_path).get_column("label").apply(
+			lambda s: [1.0, 0.0] if s else [0.0, 1.0])  # First position is signal, second position is background.
 		
 		columns = ['lepton_type_0', 'lepton_type_1', 'lepton_charge_0', 'lepton_charge_1', 'lepton_theta_diff',
 		           'lepton_phi_diff', 'lepton_angular_dist', 'lepton_inv_mass', 'sys_inv_mass', 'met_et', 'met_phi']

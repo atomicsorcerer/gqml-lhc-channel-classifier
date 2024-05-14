@@ -4,32 +4,45 @@ from torch import nn
 
 
 class ParticleFlowNetwork(nn.Module):
-	def __init__(self):
+	def __init__(self) -> None:
+		"""
+		PFN model. Takes per-particle information and attempts to classify the event as signal or background.
+		"""
 		super().__init__()
+		
+		latent_space_dim = 8
+		self.particle_map = ParticleMapping(4, latent_space_dim, [100, 100])
 		self.stack = nn.Sequential(
-			nn.Linear(33, 2048),
-			nn.Sigmoid(),
-			nn.Linear(2048, 2048),
-			nn.Sigmoid(),
-			nn.Linear(2048, 1024),
-			nn.Sigmoid(),
-			nn.Linear(1024, 512),
-			nn.Sigmoid(),
-			nn.Linear(512, 256),
-			nn.Sigmoid(),
-			nn.Linear(256, 256),
-			nn.Sigmoid(),
-			nn.Linear(256, 1),
-			nn.Sigmoid()
+			nn.Linear(latent_space_dim, 100),
+			nn.ReLU(),
+			nn.Linear(100, 100),
+			nn.ReLU(),
+			nn.Linear(100, 100),
+			nn.ReLU(),
+			nn.Linear(100, 100),
+			nn.ReLU(),
+			nn.Linear(100, 2),
+			nn.Softmax(dim=0)
 		)
 	
-	def forward(self, x):
-		logits = self.stack(x)
+	def forward(self, x) -> torch.Tensor:
+		"""
+		Forward implementation for ParticleFlowNetwork.
+		
+		Args:
+			x: Input tensor.
+
+		Returns:
+			torch.Tensor: Output tensor with two values each representing the probabilities of signal and background.
+		"""
+		latent_space = self.particle_map(x)
+		logits = self.stack(latent_space)
+		
 		return logits
 
 
 class ParticleMapping(nn.Module):
-	def __init__(self, input_size: int, output_dimension: int, hidden_layer_dimensions=None):
+	def __init__(self, input_size: int, output_dimension: int, hidden_layer_dimensions=None) -> None:
 		"""
 		Maps each set of observables of a particle to a specific dimensional output and sums them together.
 		
@@ -74,7 +87,7 @@ class ParticleMapping(nn.Module):
 		
 		self.stack = stack
 	
-	def forward(self, x: torch.Tensor):
+	def forward(self, x: torch.Tensor) -> torch.Tensor:
 		"""
 		Forward implementation for ParticleMapping.
 		
