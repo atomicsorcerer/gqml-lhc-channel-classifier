@@ -11,7 +11,7 @@ class ParticleFlowNetwork(nn.Module):
 		super().__init__()
 		
 		latent_space_dim = 8
-		self.particle_map = ParticleMapping(4, latent_space_dim, [100, 100])
+		self.particle_map = ParticleMapping(3, latent_space_dim, [100, 100])
 		self.stack = nn.Sequential(
 			nn.Linear(latent_space_dim, 100),
 			nn.ReLU(),
@@ -47,10 +47,11 @@ class ParticleMapping(nn.Module):
 		Maps each set of observables of a particle to a specific dimensional output and sums them together.
 		
 		>>> particle_map = ParticleMapping(4, 8, hidden_layer_dimensions=[100, 50])
-		>>> X = torch.Tensor([1, 2, 3, 4])
-		>>> X2 = torch.Tensor([5, 6, 7, 8])
-		>>> particle_map.forward(X) + particle_map.forward(X2) == particle_map.forward(torch.cat((X, X2)))
-		tensor([True, True, True, True, True, True, True, True])
+		>>> X = torch.Tensor([[1, 2, 3, 4]])
+		>>> X2 = torch.Tensor([[5, 6, 7, 8]])
+		>>> X3 = torch.Tensor([[1, 2, 3, 4, 5, 6, 7, 8]])
+		>>> particle_map.forward(X) + particle_map.forward(X2) == particle_map.forward(X3)
+		tensor([[True, True, True, True, True, True, True, True]])
 		
 		Args:
 			input_size: The number of data points each particle has.
@@ -92,7 +93,7 @@ class ParticleMapping(nn.Module):
 		Forward implementation for ParticleMapping.
 		
 		Args:
-			x: Input tensor.
+			x: Input tensor(s).
 		
 		Raises:
 			ValueError: Input tensor must be able to evenly split for the given input size.
@@ -100,9 +101,24 @@ class ParticleMapping(nn.Module):
 		Returns:
 			torch.Tensor: Output tensor with predefined dimensions.
 		"""
+		logits = []
+		
+		for tensor in x:
+			tensor = tensor.numpy()
+			tensor = tensor[~np.isnan(tensor)]
+			tensor = torch.Tensor(tensor)
+			tensor = self.individual_map(tensor)
+			
+			logits.append(tensor)
+		
+		logits = torch.stack(tuple(logits))
+		
+		return torch.Tensor(logits)
+	
+	def individual_map(self, x):
 		if len(x) % self.input_size != 0:
 			raise ValueError(
-				"Each particle must have the same number of observables, which must be equal to the input size.")
+				f"Each particle must have the same number of observables, which must be equal to the input size.")
 		
 		inputs = np.array_split(x.numpy(), int(len(x) / self.input_size))
 		output = np.zeros(self.output_dimension)

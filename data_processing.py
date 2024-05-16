@@ -35,6 +35,9 @@ def process_root_data(path_to_root_file: str, limit: int = None, show_iteration_
 		lepton_type = {f"lepton_type_{i}": list(set(entry.lep_type)).index(value) for i, value in
 		               enumerate(entry.lep_type)}
 		lepton_charge = {f"lepton_charge_{i}": value for i, value in enumerate(entry.lep_charge)}
+		lepton_phi = {f"lepton_phi_{i}": value for i, value in enumerate(entry.lep_phi)}
+		lepton_pt = {f"lepton_pt_{i}": value for i, value in enumerate(entry.lep_pt)}
+		lepton_eta = {f"lepton_eta_{i}": value for i, value in enumerate(entry.lep_eta)}
 		
 		# Differences in angles between the two leptons
 		lepton_thetas = [2 * np.arctan(np.exp(-value)) for value in entry.lep_eta]
@@ -72,11 +75,12 @@ def process_root_data(path_to_root_file: str, limit: int = None, show_iteration_
 		
 		event = {
 			k: v for k, v in
-			zip([*lepton_type.keys(),
+			zip([*lepton_type.keys(), *lepton_phi.keys(), *lepton_eta.keys(), *lepton_pt.keys(),
 			     *lepton_charge.keys(), *jet_pt.keys(), *jet_theta.keys(), *jet_phi.keys(), *jet_type.keys(),
 			     *jet_energy.keys()],
 			    
-			    [*lepton_type.values(), *lepton_charge.values(), *jet_pt.values(), *jet_theta.values(),
+			    [*lepton_type.values(), *lepton_phi.values(), *lepton_eta.values(), *lepton_pt.values(),
+			     *lepton_charge.values(), *jet_pt.values(), *jet_theta.values(),
 			     *jet_phi.values(), *jet_type.values(), *jet_energy.values()])
 		}
 		

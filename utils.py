@@ -10,6 +10,8 @@ def train(dataloader, model, loss_fn, optimizer):
 		pred = model(X)
 		loss = loss_fn(pred, y)
 		
+		print(X[0], pred[0])
+		
 		# Backpropagation
 		optimizer.zero_grad()
 		loss.backward()
