@@ -26,7 +26,7 @@ def process_root_data(path_to_root_file: str, limit: int = None, show_iteration_
 			break
 		
 		if show_iteration_count:
-			print(f"\rProcessing... Iteration: {i:09d}", end="")
+			print(f"\rProcessing... Iteration: {(i + 1):09d}", end="")
 		
 		if entry.lep_n != 2:  # Reject all events with more or less than two leptons
 			continue
@@ -73,15 +73,19 @@ def process_root_data(path_to_root_file: str, limit: int = None, show_iteration_
 			   + sum(lepton_z_momentum + jet_z_momentum) ** 2)
 		)
 		
+		pid = {f"pid_{i}": value for i, value in enumerate(
+			[*[1] * entry.lep_n, *[-1] * entry.jet_n]
+		)}
+		
 		event = {
 			k: v for k, v in
 			zip([*lepton_type.keys(), *lepton_phi.keys(), *lepton_eta.keys(), *lepton_pt.keys(),
 			     *lepton_charge.keys(), *jet_pt.keys(), *jet_theta.keys(), *jet_phi.keys(), *jet_type.keys(),
-			     *jet_energy.keys()],
+			     *jet_energy.keys(), *pid.keys()],
 			    
 			    [*lepton_type.values(), *lepton_phi.values(), *lepton_eta.values(), *lepton_pt.values(),
-			     *lepton_charge.values(), *jet_pt.values(), *jet_theta.values(),
-			     *jet_phi.values(), *jet_type.values(), *jet_energy.values()])
+			     *lepton_charge.values(), *jet_pt.values(), *jet_theta.values(), *jet_phi.values(), *jet_type.values(),
+			     *jet_energy.values(), *pid.values()])
 		}
 		
 		event["id"] = i

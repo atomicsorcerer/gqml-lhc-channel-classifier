@@ -1,28 +1,30 @@
-import numpy as np
 import torch
 from torch import nn
 
 
 class ParticleFlowNetwork(nn.Module):
-	def __init__(self) -> None:
+	def __init__(self, latent_space_dim) -> None:
 		"""
 		PFN model. Takes per-particle information and attempts to classify the event as signal or background.
+		
+		Args:
+			latent_space_dim: The size of the latent space vector.
 		"""
 		super().__init__()
 		
-		latent_space_dim = 8
-		self.particle_map = ParticleMapping(3, latent_space_dim, [100, 100])
+		self.latent_space_dim = latent_space_dim
 		self.stack = nn.Sequential(
-			nn.Linear(latent_space_dim, 100),
+			ParticleMapping(4, latent_space_dim, [100, 100]),
+			nn.Linear(latent_space_dim, 256),
 			nn.ReLU(),
-			nn.Linear(100, 100),
+			nn.Linear(256, 256),
 			nn.ReLU(),
-			nn.Linear(100, 100),
+			nn.Linear(256, 128),
 			nn.ReLU(),
-			nn.Linear(100, 100),
+			nn.Linear(128, 128),
 			nn.ReLU(),
-			nn.Linear(100, 2),
-			nn.Softmax(dim=0)
+			nn.Linear(128, 1),
+			nn.Sigmoid()
 		)
 	
 	def forward(self, x) -> torch.Tensor:
@@ -30,13 +32,12 @@ class ParticleFlowNetwork(nn.Module):
 		Forward implementation for ParticleFlowNetwork.
 		
 		Args:
-			x: Input tensor.
+			x: Input tensor(s).
 
 		Returns:
 			torch.Tensor: Output tensor with two values each representing the probabilities of signal and background.
 		"""
-		latent_space = self.particle_map(x)
-		logits = self.stack(latent_space)
+		logits = self.stack(x)
 		
 		return logits
 
@@ -74,7 +75,7 @@ class ParticleMapping(nn.Module):
 		elif len(hidden_layer_dimensions) == 0:
 			raise ValueError("Hidden layer dimensions cannot be empty.")
 		
-		stack = nn.Sequential(nn.Linear(input_size, hidden_layer_dimensions[0] or output_dimension))
+		stack = nn.Sequential(nn.Linear(input_size, hidden_layer_dimensions[0] or output_dimension), nn.ReLU())
 		
 		for i in range(len(hidden_layer_dimensions)):
 			stack.append(
@@ -85,6 +86,7 @@ class ParticleMapping(nn.Module):
 			stack.append(nn.ReLU())
 		
 		stack.append(nn.Linear(hidden_layer_dimensions[-1], output_dimension))
+		stack.append(nn.Sigmoid())
 		
 		self.stack = stack
 	
@@ -95,39 +97,50 @@ class ParticleMapping(nn.Module):
 		Args:
 			x: Input tensor(s).
 		
-		Raises:
-			ValueError: Input tensor must be able to evenly split for the given input size.
-			
 		Returns:
 			torch.Tensor: Output tensor with predefined dimensions.
 		"""
 		logits = []
 		
 		for tensor in x:
-			tensor = tensor.numpy()
-			tensor = tensor[~np.isnan(tensor)]
-			tensor = torch.Tensor(tensor)
 			tensor = self.individual_map(tensor)
-			
 			logits.append(tensor)
 		
 		logits = torch.stack(tuple(logits))
+		print(logits.grad_fn)
 		
-		return torch.Tensor(logits)
+		return logits
 	
-	def individual_map(self, x):
+	def individual_map(self, x) -> torch.Tensor:
+		"""
+		Individual mapping for summand.
+		
+		>>> particle_map = ParticleMapping(4, 8, hidden_layer_dimensions=[100, 50])
+		>>> X = torch.Tensor([1, 2, 3, 4, torch.nan, torch.nan, torch.nan, torch.nan])
+		>>> len(particle_map.individual_map(X))
+		8
+
+		Args:
+			x: Input tensor.
+
+		Raises:
+			ValueError: Input tensor must be able to evenly split for the given input size.
+
+		Returns:
+			torch.Tensor: Output tensor with predefined dimensions.
+		"""
+		x = x[~torch.isnan(x)]
+		
 		if len(x) % self.input_size != 0:
 			raise ValueError(
 				f"Each particle must have the same number of observables, which must be equal to the input size.")
 		
-		inputs = np.array_split(x.numpy(), int(len(x) / self.input_size))
-		output = np.zeros(self.output_dimension)
+		output = torch.zeros(self.output_dimension)
 		
-		for particle in inputs:
-			tensor = torch.from_numpy(particle)
-			individual_map = self.stack(tensor)
+		for i in range(int(len(x) / self.input_size)):
+			summand = self.stack(x[i * self.input_size:(i + 1) * self.input_size])
 			
-			for i, value in enumerate(individual_map):
-				output[i] += value
+			for j, value in enumerate(summand):
+				output[j] += value
 		
 		return torch.Tensor(output)

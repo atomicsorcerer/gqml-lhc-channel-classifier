@@ -10,8 +10,6 @@ def train(dataloader, model, loss_fn, optimizer):
 		pred = model(X)
 		loss = loss_fn(pred, y)
 		
-		print(X[0], pred[0])
-		
 		# Backpropagation
 		optimizer.zero_grad()
 		loss.backward()
@@ -19,7 +17,7 @@ def train(dataloader, model, loss_fn, optimizer):
 		
 		if batch % 100 == 0:
 			loss, current = loss.item(), (batch + 1) * len(X)
-			print(f"loss: {loss:>5f}  [{current:>5d}/{size:>5d}]")
+			print(f"loss: {loss:>5f}\t [{current:>5d}/{size:>5d}]")
 
 
 def test(dataloader, model, loss_fn):
@@ -33,8 +31,8 @@ def test(dataloader, model, loss_fn):
 			test_loss += loss_fn(pred, y).item()
 			
 			for i_y, i_pred in zip(list(y), list(pred)):
-				i_y = list(i_y[0].numpy())[0]
-				i_pred = np.round(list(i_pred[0].numpy())[0])
+				i_y = i_y[0].numpy()
+				i_pred = np.round(i_pred[0].numpy())
 				correct += 1 if i_y == i_pred else 0
 	
 	test_loss /= num_batches
