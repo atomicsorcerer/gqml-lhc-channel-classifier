@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 
 
@@ -32,7 +31,7 @@ def test(dataloader, model, loss_fn):
 			
 			for i_y, i_pred in zip(list(y), list(pred)):
 				i_y = i_y[0].numpy()
-				i_pred = np.round(i_pred[0].numpy())
+				i_pred = torch.round(torch.nn.functional.sigmoid(i_pred)).numpy()
 				correct += 1 if i_y == i_pred else 0
 	
 	test_loss /= num_batches

@@ -13,18 +13,19 @@ class ParticleFlowNetwork(nn.Module):
 		super().__init__()
 		
 		self.latent_space_dim = latent_space_dim
+		
+		self.p_map = ParticleMapping(4, 24, latent_space_dim, [100, 100])
+		
 		self.stack = nn.Sequential(
-			ParticleMapping(4, latent_space_dim, [100, 100]),
-			nn.Linear(latent_space_dim, 256),
+			nn.Linear(latent_space_dim, 100),
 			nn.ReLU(),
-			nn.Linear(256, 256),
+			nn.Linear(100, 100),
 			nn.ReLU(),
-			nn.Linear(256, 128),
+			nn.Linear(100, 100),
 			nn.ReLU(),
-			nn.Linear(128, 128),
+			nn.Linear(100, 100),
 			nn.ReLU(),
-			nn.Linear(128, 1),
-			nn.Sigmoid()
+			nn.Linear(100, 1),
 		)
 	
 	def forward(self, x) -> torch.Tensor:
@@ -33,24 +34,26 @@ class ParticleFlowNetwork(nn.Module):
 		
 		Args:
 			x: Input tensor(s).
-
+		
 		Returns:
 			torch.Tensor: Output tensor with two values each representing the probabilities of signal and background.
 		"""
-		logits = self.stack(x)
+		x = self.p_map(x)
+		x = self.stack(x)
 		
-		return logits
+		return x
 
 
 class ParticleMapping(nn.Module):
-	def __init__(self, input_size: int, output_dimension: int, hidden_layer_dimensions=None) -> None:
+	def __init__(self, input_size: int, total_features: int, output_dimension: int,
+	             hidden_layer_dimensions=None) -> None:
 		"""
 		Maps each set of observables of a particle to a specific dimensional output and sums them together.
 		
-		>>> particle_map = ParticleMapping(4, 8, hidden_layer_dimensions=[100, 50])
-		>>> X = torch.Tensor([[1, 2, 3, 4]])
-		>>> X2 = torch.Tensor([[5, 6, 7, 8]])
-		>>> X3 = torch.Tensor([[1, 2, 3, 4, 5, 6, 7, 8]])
+		>>> particle_map = ParticleMapping(4, 8, 8, hidden_layer_dimensions=[100, 50])
+		>>> X = torch.Tensor([[[1, 2, 3, 4], [float("nan"), float("nan"), float("nan"), float("nan")]]])
+		>>> X2 = torch.Tensor([[[5, 6, 7, 8], [float("nan"), float("nan"), float("nan"), float("nan")]]])
+		>>> X3 = torch.Tensor([[[1, 2, 3, 4], [5, 6, 7, 8]]])
 		>>> particle_map.forward(X) + particle_map.forward(X2) == particle_map.forward(X3)
 		tensor([[True, True, True, True, True, True, True, True]])
 		
@@ -62,6 +65,7 @@ class ParticleMapping(nn.Module):
 		Raises:
 			TypeError: If hidden_layer_dimensions is not a list.
 			ValueError: If hidden_layer_dimensions is an empty list.
+			ValueError: Input tensor must be able to evenly split for the given input size.
 		"""
 		super().__init__()
 		
@@ -86,9 +90,15 @@ class ParticleMapping(nn.Module):
 			stack.append(nn.ReLU())
 		
 		stack.append(nn.Linear(hidden_layer_dimensions[-1], output_dimension))
-		stack.append(nn.Sigmoid())
 		
 		self.stack = stack
+		
+		if total_features % input_size != 0:
+			raise ValueError(
+				f"Each particle must have the same number of observables, which must be equal to the input size. "
+				f"Total_features % input_size must be zero.")
+		
+		self.avg_pool_2d = torch.nn.AvgPool2d((total_features // input_size, 1))
 	
 	def forward(self, x: torch.Tensor) -> torch.Tensor:
 		"""
@@ -100,47 +110,24 @@ class ParticleMapping(nn.Module):
 		Returns:
 			torch.Tensor: Output tensor with predefined dimensions.
 		"""
-		logits = []
+		x = self.stack(x)
+		x = torch.nan_to_num(x)
+		x = self.sum_pool_2d(x)
+		x = torch.squeeze(x, 1)
 		
-		for tensor in x:
-			tensor = self.individual_map(tensor)
-			logits.append(tensor)
-		
-		logits = torch.stack(tuple(logits))
-		print(logits.grad_fn)
-		
-		return logits
+		return x
 	
-	def individual_map(self, x) -> torch.Tensor:
+	def sum_pool_2d(self, x):
 		"""
-		Individual mapping for summand.
+		Performs sum pooling.
 		
-		>>> particle_map = ParticleMapping(4, 8, hidden_layer_dimensions=[100, 50])
-		>>> X = torch.Tensor([1, 2, 3, 4, torch.nan, torch.nan, torch.nan, torch.nan])
-		>>> len(particle_map.individual_map(X))
-		8
-
 		Args:
-			x: Input tensor.
-
-		Raises:
-			ValueError: Input tensor must be able to evenly split for the given input size.
+			x: Input tensor(s).
 
 		Returns:
-			torch.Tensor: Output tensor with predefined dimensions.
+			torch.Tensor: Output tensor with predefined output dimensions.
 		"""
-		x = x[~torch.isnan(x)]
+		x = self.avg_pool_2d(x)
+		x = torch.mul(x, self.input_size)
 		
-		if len(x) % self.input_size != 0:
-			raise ValueError(
-				f"Each particle must have the same number of observables, which must be equal to the input size.")
-		
-		output = torch.zeros(self.output_dimension)
-		
-		for i in range(int(len(x) / self.input_size)):
-			summand = self.stack(x[i * self.input_size:(i + 1) * self.input_size])
-			
-			for j, value in enumerate(summand):
-				output[j] += value
-		
-		return torch.Tensor(output)
+		return x

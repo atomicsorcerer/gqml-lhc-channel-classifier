@@ -113,7 +113,7 @@ if __name__ == "__main__":
 	processed_data: list[dict] = []
 	
 	for file_name, label in zip(file_names, data_label_mapping):
-		processed_data = [*processed_data, *process_root_data("Data/Raw Data/" + file_name.strip(), limit=10000,
+		processed_data = [*processed_data, *process_root_data("Data/Raw Data/" + file_name.strip(), limit=100000,
 		                                                      show_iteration_count=True, label=label)]
 		
 		print(f"\nProcessed {file_name.strip()}...\n")
