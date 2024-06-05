@@ -14,7 +14,7 @@ class ParticleFlowNetwork(nn.Module):
 		
 		self.latent_space_dim = latent_space_dim
 		
-		self.p_map = ParticleMapping(4, 24, latent_space_dim, [100, 100])
+		self.p_map = ParticleMapping(4, 32, latent_space_dim, [100, 100])
 		
 		self.stack = nn.Sequential(
 			nn.Linear(latent_space_dim, 100),
@@ -70,6 +70,7 @@ class ParticleMapping(nn.Module):
 		super().__init__()
 		
 		self.input_size = input_size
+		self.total_features = total_features
 		self.output_dimension = output_dimension
 		
 		if hidden_layer_dimensions is None:
@@ -78,6 +79,11 @@ class ParticleMapping(nn.Module):
 			raise TypeError(f"Hidden layer dimensions must be a valid list. {hidden_layer_dimensions} is not valid.")
 		elif len(hidden_layer_dimensions) == 0:
 			raise ValueError("Hidden layer dimensions cannot be empty.")
+		
+		if total_features % input_size != 0:
+			raise ValueError(
+				f"Each particle must have the same number of observables, which must be equal to the input size. "
+				f"Total_features % input_size must be zero.")
 		
 		stack = nn.Sequential(nn.Linear(input_size, hidden_layer_dimensions[0] or output_dimension), nn.ReLU())
 		
@@ -92,12 +98,6 @@ class ParticleMapping(nn.Module):
 		stack.append(nn.Linear(hidden_layer_dimensions[-1], output_dimension))
 		
 		self.stack = stack
-		
-		if total_features % input_size != 0:
-			raise ValueError(
-				f"Each particle must have the same number of observables, which must be equal to the input size. "
-				f"Total_features % input_size must be zero.")
-		
 		self.avg_pool_2d = torch.nn.AvgPool2d((total_features // input_size, 1))
 	
 	def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -110,20 +110,21 @@ class ParticleMapping(nn.Module):
 		Returns:
 			torch.Tensor: Output tensor with predefined dimensions.
 		"""
-		x = self.stack(x)
+		# x = x[~torch.any(x.isnan(), 2)]
 		x = torch.nan_to_num(x)
+		x = self.stack(x)
 		x = self.sum_pool_2d(x)
 		x = torch.squeeze(x, 1)
 		
 		return x
 	
-	def sum_pool_2d(self, x):
+	def sum_pool_2d(self, x: torch.Tensor, ):
 		"""
 		Performs sum pooling.
 		
 		Args:
 			x: Input tensor(s).
-
+		
 		Returns:
 			torch.Tensor: Output tensor with predefined output dimensions.
 		"""
